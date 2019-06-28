@@ -155,13 +155,42 @@ IntegerVector k2alg(IntegerVector& cp, int u,int i, int n, IntegerVector r, int 
   return p;
 }
 
+
+bool checkDataset(IntegerMatrix data, IntegerVector r)
+{
+
+  int m = data.rows();
+  int n = data.cols();
+  if(r.size()!=n)
+  {
+    return false;
+  }
+  for(int i = 0; i < n; i++)
+  {
+    for(int j = 0; j < m; j++)
+    {
+      if(data(j,i)>=r[i])
+      {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
+
 // [[Rcpp::export]]
 List k2procedure(SEXP x,SEXP dims, SEXP varOrder, int u = -1)
 {
   IntegerMatrix data(x);
   IntegerVector order(varOrder);
   IntegerVector r(dims);
-  
+  bool valid = checkDataset(data, r);
+  if(!valid)
+  {
+    Rcout << "Invalid dataset" << endl;
+    return NULL;
+  }
   List result;
   int n = data.cols();
   int m = data.rows();
@@ -197,10 +226,15 @@ List k2procedure(SEXP x,SEXP dims, SEXP varOrder, int u = -1)
 }
 
 
+
+
+
+
+
 /*
  //test using these commands
  order <- c(0,1,2)  
  r <- c(2,2,2)
- data <- matrix(c(1,0,0,1,1,1,0,0,1,1,1,1,0,0,0,0,1,1,1,1,1,0,0,0,1,1,1,0,0,0), 10,3)
+   data <- matrix(c(1,0,0,1,1,1,0,0,1,1,1,1,0,0,0,0,1,1,1,1,1,0,0,0,1,1,1,0,0,0), 10,3)
  k2procedure(data, r, order, 2)
  */
