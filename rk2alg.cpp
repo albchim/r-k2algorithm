@@ -226,8 +226,25 @@ List k2procedure(SEXP x,SEXP dims, SEXP varOrder, int u = -1)
 }
 
 
-
-
+/*** R
+k2procedureSplit <- function(x, dims, initVarOder, u = -1, subSize = 500)
+{
+  nRows <- dim(x)[0]
+  nSplits <- nRows / subSize
+  vOrder <- initVarOder
+  for(i in 1:nSplits)
+  {
+    lastRow <- i + subSize - 1
+    if(i==nSplits)
+    {
+      lastRow <- nRows
+    }
+    subData <- x[i:lastRow,]
+    res <- k2procedure(subData, dims, vOrder, u)
+    
+  }
+}
+*/
 
 
 
