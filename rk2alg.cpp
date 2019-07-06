@@ -17,7 +17,8 @@ double approxLogFact(double n)
   return (n+0.5)*n-n+0.5*log(2*M_PI);
 }
 
-int compute_instance_index(int n,int rowIndex, IntegerMatrix& data, IntegerVector& r, int pLen, IntegerVector& p_i)
+// [[Rcpp::export]]
+int compute_instance_index(int n,int rowIndex, IntegerMatrix data, IntegerVector r, int pLen, IntegerVector p_i)
 {
   int j = 0;
   int c = r[p_i[pLen-1]];
@@ -25,18 +26,19 @@ int compute_instance_index(int n,int rowIndex, IntegerMatrix& data, IntegerVecto
   {
     if(l==pLen-1)
     {
-      j += data[p_i[l]+n*rowIndex];
+      j += data(rowIndex, p_i[l]);
     }
     else
     {
-      j += c*data[p_i[l]+n*rowIndex];
+      j += c*data(rowIndex, p_i[l]);
       c *= r[p_i[l]];
     }
   }
   return j;
 }
 
-IntegerMatrix compute_alpha(int i, int n, IntegerVector& r, int pLen, IntegerVector& p_i, int m, IntegerMatrix& data, int& nrows)
+// [[Rcpp::export]]
+IntegerMatrix compute_alpha(int i, int n, IntegerVector r, int pLen, IntegerVector p_i, int m, IntegerMatrix data, int& nrows)
 {
   nrows = 1;
   for(int l = 0; l < pLen; l++)
@@ -47,27 +49,27 @@ IntegerMatrix compute_alpha(int i, int n, IntegerVector& r, int pLen, IntegerVec
   IntegerMatrix alpha(nrows, r_i);
   for(int a = 0; a < m; a++)
   {
-    int k = data[i+a*n];
+    int k = data(a,i);
     int j = compute_instance_index(n,a,data, r, pLen, p_i);
-    alpha[k+j*r_i]++;
+    alpha(j,k)++;
   }
   return alpha;
 }
 
-IntegerMatrix compute_alpha_nop(int i, int n, IntegerVector& r, int m, IntegerMatrix& data)
+IntegerVector compute_alpha_nop(int i, int n, IntegerVector r, int m, IntegerMatrix data)
 {
   int r_i = r[i];
-  IntegerMatrix alpha(r_i,1);
+  IntegerVector alpha(r_i);
   for(int a = 0; a < m; a++)
   {
-    alpha[data[i+n*a]]++;
+    alpha[data(a,i)]++;
   }
   return alpha;
 }
 
-double compute_f_nop(int i, int n, IntegerVector& r,  int m, IntegerMatrix& data)
+double compute_f_nop(int i, int n, IntegerVector r,  int m, IntegerMatrix data)
 {
-  IntegerMatrix alpha = compute_alpha_nop(i, n, r, m, data);
+  IntegerVector alpha = compute_alpha_nop(i, n, r, m, data);
   int N = 0;
   double prod = 1;
   for(int k = 0; k < r[i]; k++)
@@ -77,8 +79,8 @@ double compute_f_nop(int i, int n, IntegerVector& r,  int m, IntegerMatrix& data
   }
   return factorial(r[i]-1)*prod/factorial(N+r[i]-1);
 }
-const double exp_scale = 100000;
-double compute_f(int i, int n, IntegerVector& r, int pLen, IntegerVector& p_i, int m, IntegerMatrix& data)
+
+double compute_f(int i, int n, IntegerVector r, int pLen, IntegerVector p_i, int m, IntegerMatrix data)
 {
   int nrows = 0;
   IntegerMatrix alpha = compute_alpha(i,n,r,pLen, p_i, m, data, nrows);
@@ -88,7 +90,7 @@ double compute_f(int i, int n, IntegerVector& r, int pLen, IntegerVector& p_i, i
   {
     for(int k = 0; k < r_i; k++)
     {
-      N[j] += alpha[k+j*r_i];
+      N[j] += alpha(j,k);
     }
   }
   double f = 1;
@@ -101,7 +103,7 @@ double compute_f(int i, int n, IntegerVector& r, int pLen, IntegerVector& p_i, i
     //lf -= approxLogFact(N[j]+r_i-1);
     for(int k = 0; k < r_i; k++)
     {
-      f *= factorial(alpha[k+j*r_i]);
+      f *= factorial(alpha(j,k));
       //lf += approxLogFact(alpha[k+j*r_i]);
     }
   }
@@ -110,7 +112,7 @@ double compute_f(int i, int n, IntegerVector& r, int pLen, IntegerVector& p_i, i
   return f;
 }
 
-IntegerVector k2alg(IntegerVector& cp, double& score,int u,int i, int n, IntegerVector& r, int m, IntegerMatrix& data)
+IntegerVector k2alg(IntegerVector& cp, double& score,int u,int i, int n, IntegerVector r, int m, IntegerMatrix data)
 {
   IntegerVector p;
   int pLen = 0;
@@ -199,6 +201,7 @@ List k2procedure(SEXP x,SEXP dims, SEXP varOrder, NumericVector& scores, int u =
   List result;
   int n = data.cols();
   int m = data.rows();
+
   if(u==-1)
   {
     u=n-1;
@@ -217,6 +220,7 @@ List k2procedure(SEXP x,SEXP dims, SEXP varOrder, NumericVector& scores, int u =
         break;
       }
     }
+
     if(cp.size()!=0)
     {
       double score = 0;
@@ -290,12 +294,14 @@ List k2procedureSplit(SEXP x,SEXP dims, SEXP varOrder, int verbose = 0,int u = -
 }
 
 // [[Rcpp::export]]
-NumericMatrix conditionalProb(int i, IntegerMatrix x,IntegerVector dims, SEXP p_i)
+NumericMatrix conditionalProb(int i, IntegerMatrix x,IntegerVector dims, IntegerVector parents)
 {
   int nRows = 1;
   int m = x.nrow();
   int n= x.ncol();
-  IntegerVector parents(p_i);
+  //Rcout << "n° samples: "<< m << endl;
+  //Rcout << "n° variables " << n << endl;
+  
   int pLen = parents.size();
   if(pLen >= n)
   {
@@ -311,6 +317,7 @@ NumericMatrix conditionalProb(int i, IntegerMatrix x,IntegerVector dims, SEXP p_
     nRows *= dims[parents[l]];
   }
   NumericVector P(nRows*r_i);
+  //Rcout << "n° of conditions: "<< nRows << endl;
   IntegerVector counts(nRows);
   for(int a = 0; a < m; a++)
   {
@@ -331,15 +338,15 @@ NumericMatrix conditionalProb(int i, IntegerMatrix x,IntegerVector dims, SEXP p_
   names[pLen+1] = "P";
   for(int l = 0; l < pLen; l++)
   {
-    names[l] = "x" + to_string(parents[l]);
+    names[l] = "cond. x" + to_string(parents[l]);
   }
   colnames(T) = names;
   for(int j = 0; j < nRows; j++)
   {
     for(int l = 0; l < r_i; l++)
     {
-      T(j*r_i+l,pLen+1)=P[j*r_i+l];
-      T(j*r_i+l,pLen)=l;
+      T ((j*r_i+l),pLen+1) =P[j*r_i+l];
+      T (j*r_i+l,pLen)=l;
     }
     int c = nRows;
     for(int l = 0; l < pLen; l++)
@@ -347,7 +354,14 @@ NumericMatrix conditionalProb(int i, IntegerMatrix x,IntegerVector dims, SEXP p_
       c /= dims[parents[l]];
       int val;
 
-      val = (j / c)%dims[parents[l]]; 
+      if(l==pLen-1)
+      {
+        val = (j % dims[parents[l]]);
+      }
+      else
+      {
+        val = (j / c)%dims[parents[l]]; 
+      }
       
       for(int k = 0; k < r_i; k++)
       {
