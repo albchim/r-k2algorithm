@@ -186,8 +186,7 @@ bool checkDataset(IntegerMatrix data, IntegerVector r)
 }
 
 
-// [[Rcpp::export]]
-List k2procedure(SEXP x,SEXP dims, SEXP varOrder, NumericVector& scores, int u = -1)
+List k2procedureInternal(SEXP x,SEXP dims, SEXP varOrder, NumericVector& scores, int u = -1)
 {
   IntegerMatrix data(x);
   IntegerVector order(varOrder);
@@ -201,11 +200,12 @@ List k2procedure(SEXP x,SEXP dims, SEXP varOrder, NumericVector& scores, int u =
   List result;
   int n = data.cols();
   int m = data.rows();
-
+  
   if(u==-1)
   {
     u=n-1;
   }
+  scores = NumericVector(n);
   for(int i = 0; i < n; i++)
   {
     IntegerVector cp;
@@ -238,7 +238,7 @@ List k2procedure(SEXP x,SEXP dims, SEXP varOrder, NumericVector& scores, int u =
 }
 
 // [[Rcpp::export]]
-List k2procedureSplit(SEXP x,SEXP dims, SEXP varOrder, int verbose = 0,int u = -1, int splitSize=100)
+List k2procedure(SEXP x,SEXP dims, SEXP varOrder, int u =-1,int verbose = 0, int splitSize=100)
 {
   IntegerMatrix data(x);
   IntegerVector order(varOrder);
@@ -246,6 +246,11 @@ List k2procedureSplit(SEXP x,SEXP dims, SEXP varOrder, int verbose = 0,int u = -
   int nRows = data.nrow();
   int nCols = data.ncol();
   int nSplits = nRows / splitSize;
+  if(nSplits == 0)
+  {
+    nSplits++;
+    splitSize=nRows;
+  }
   double bestScore = 0;
   int bestRichness = 0;
   List bestList;
@@ -266,7 +271,7 @@ List k2procedureSplit(SEXP x,SEXP dims, SEXP varOrder, int verbose = 0,int u = -
     from += sz*nCols;
     
     NumericVector scs(nCols);
-    List res =  k2procedure(sData, r, order, scs, u);
+    List res =  k2procedureInternal(sData, r, order, scs, u);
     
     double totalSc = mean(scs);
     int richness = 0;
