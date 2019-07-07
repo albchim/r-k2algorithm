@@ -157,7 +157,7 @@ IntegerVector k2alg(IntegerVector& cp, double& score,int u,int i, int n, Integer
   score = pOld;
   if(pLen==0)
   {
-    p.push_back(-1);
+    p.push_back(i);
   }
   return p;
 }
@@ -231,7 +231,7 @@ List k2procedureInternal(SEXP x,SEXP dims, SEXP varOrder, NumericVector& scores,
     }
     else
     {
-      result.push_back(rep(-1,1));
+      result.push_back(rep(i,1));
     }
   }
   return result;
