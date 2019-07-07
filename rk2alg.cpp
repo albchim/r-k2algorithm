@@ -238,7 +238,7 @@ List k2procedureInternal(SEXP x,SEXP dims, SEXP varOrder, NumericVector& scores,
 }
 
 // [[Rcpp::export]]
-List k2procedure(SEXP x,SEXP dims, SEXP varOrder, int u =-1,int verbose = 0, int splitSize=100)
+SEXP k2procedure(SEXP x,SEXP dims, SEXP varOrder, int u =-1,int returnType = 0, int verbose = 0, int splitSize=100)
 {
   IntegerMatrix data(x);
   IntegerVector order(varOrder);
@@ -295,7 +295,32 @@ List k2procedure(SEXP x,SEXP dims, SEXP varOrder, int u =-1,int verbose = 0, int
       bestList = res;
     }
   }
-  return bestList;
+  
+  if(returnType==0)
+  {
+    return bestList;
+  }
+  else
+  {
+    IntegerMatrix adj(nCols,nCols);
+    CharacterVector names(nCols);
+    for(int i = 0; i < nCols; i++)
+    {
+      names[i]=("x"+to_string(i));
+    }
+    for(int i = 0; i < nCols; i++)
+    {
+      IntegerVector p_i(bestList.at(i));
+      for(int j = 0; j < p_i.size(); j++)
+      {
+        if(p_i[j]!=i)
+          adj(p_i[j],i)=1;
+      }
+    }
+    rownames(adj)=names;
+    colnames(adj) =names;
+    return adj;
+  }
 }
 
 // [[Rcpp::export]]
