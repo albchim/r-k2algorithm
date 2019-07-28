@@ -17,7 +17,6 @@ double approxLogFact(double n)
   return (n+0.5)*n-n+0.5*log(2*M_PI);
 }
 
-// [[Rcpp::export]]
 int compute_instance_index(int n,int rowIndex, IntegerMatrix data, IntegerVector r, int pLen, IntegerVector p_i)
 {
   int j = 0;
@@ -37,7 +36,6 @@ int compute_instance_index(int n,int rowIndex, IntegerMatrix data, IntegerVector
   return j;
 }
 
-// [[Rcpp::export]]
 IntegerMatrix compute_alpha(int i, int n, IntegerVector r, int pLen, IntegerVector p_i, int m, IntegerMatrix data, int& nrows)
 {
   nrows = 1;
@@ -251,6 +249,9 @@ SEXP k2procedure(SEXP x,SEXP dims, SEXP varOrder, int u =-1,int returnType = 0, 
     nSplits++;
     splitSize=nRows;
   }
+  
+  NumericMatrix wadj(nCols, nCols);
+  double normScore = 0;
   double bestScore = 0;
   int bestRichness = 0;
   List bestList;
@@ -294,20 +295,30 @@ SEXP k2procedure(SEXP x,SEXP dims, SEXP varOrder, int u =-1,int returnType = 0, 
       bestRichness = richness;
       bestList = res;
     }
+    if(returnType == 2)
+    {
+      normScore += totalSc;
+      for(int i = 0; i < nCols; i++)
+      {
+        IntegerVector p_i(res.at(i));
+        for(int j = 0; j < p_i.size(); j++)
+        {
+          if(p_i[j]!=i)
+            wadj(p_i[j],i)+=normScore;
+        }
+      }
+    }
   }
   
-  if(returnType==0)
+  CharacterVector names(nCols);
+  for(int i = 0; i < nCols; i++)
   {
-    return bestList;
+    names[i]=("x"+to_string(i));
   }
-  else
+  if(returnType==1)
   {
     IntegerMatrix adj(nCols,nCols);
-    CharacterVector names(nCols);
-    for(int i = 0; i < nCols; i++)
-    {
-      names[i]=("x"+to_string(i));
-    }
+    
     for(int i = 0; i < nCols; i++)
     {
       IntegerVector p_i(bestList.at(i));
@@ -321,18 +332,47 @@ SEXP k2procedure(SEXP x,SEXP dims, SEXP varOrder, int u =-1,int returnType = 0, 
     colnames(adj) =names;
     return adj;
   }
+  else if(returnType==2)
+  {
+    for(int i = 0; i < nCols; i++)
+    {
+      for(int j = 0; j < nCols; j++)
+      {
+        wadj[i*nCols+j] /= (normScore);
+      }
+    }
+    rownames(wadj)=names;
+    colnames(wadj) =names;
+    return wadj;
+  }
+  else
+  {
+    return bestList;
+  }
 }
 
+
 // [[Rcpp::export]]
-NumericMatrix conditionalProb(int i, IntegerMatrix x,IntegerVector dims, IntegerVector parents)
+NumericMatrix condProb(int i, IntegerMatrix x,IntegerVector dims, IntegerVector parents, int method = 0)
 {
   int nRows = 1;
   int m = x.nrow();
   int n= x.ncol();
+  int pLen = parents.size();
   //Rcout << "n° samples: "<< m << endl;
   //Rcout << "n° variables " << n << endl;
+  if(i < 0 || i >= n)
+  {
+    return NumericMatrix(0,0);
+  }
+  for(int l = 0; l < pLen; l++)
+  {
+    if(parents[l]<0 || parents[l]>= n || parents[l]==i)
+    {
+      return NumericMatrix(0,0);
+    }
+  }
   
-  int pLen = parents.size();
   if(pLen >= n)
   {
     return NumericMatrix(0,0);
@@ -347,19 +387,46 @@ NumericMatrix conditionalProb(int i, IntegerMatrix x,IntegerVector dims, Integer
     nRows *= dims[parents[l]];
   }
   NumericVector P(nRows*r_i);
-  //Rcout << "n° of conditions: "<< nRows << endl;
-  IntegerVector counts(nRows);
-  for(int a = 0; a < m; a++)
+  
+  if(method == 0)
   {
-    int j = compute_instance_index(n, a, x, dims, pLen, parents); //the actual index in P is different
-    P[j*r_i+x(a,i)]++;
-    counts[j]++;
-  }
-  for(int j = 0; j < nRows; j++)
-  {
-    for(int l = 0; l < r_i; l++)
+    
+  
+  
+  
+    IntegerVector counts(nRows);
+    for(int a = 0; a < m; a++)
     {
-      P[j*r_i+l] /= counts[j];
+      int j = compute_instance_index(n, a, x, dims, pLen, parents); //the actual index in P is different
+      P[j*r_i+x(a,i)]++;
+      counts[j]++;
+    }
+    for(int j = 0; j < nRows; j++)
+    {
+      for(int l = 0; l < r_i; l++)
+      {
+        P[j*r_i+l] /= counts[j];
+      }
+    }
+  }
+  else
+  {
+    IntegerMatrix Nijk = compute_alpha(i,n,dims,pLen,parents,m,x,nRows);
+    IntegerVector Nij(nRows);
+    for(int j = 0; j < nRows; j++)
+    {
+      for(int k = 0; k < r_i; k++)
+      {
+        Nij(j) += Nijk[j*r_i+k];
+        P[j*r_i+k] = Nijk[j*r_i+k]+1;
+      }
+    }
+    for(int j = 0; j < nRows; j++)
+    {
+      for(int k = 0; k < r_i; k++)
+      {
+        P[j*r_i+k] /= Nij[j]+r_i;
+      }
     }
   }
   NumericMatrix T(nRows*r_i, 2+pLen);
